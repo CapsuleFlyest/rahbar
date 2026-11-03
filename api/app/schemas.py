@@ -62,3 +62,5 @@ class AskResponse(BaseModel):
     confidence: Literal["high", "medium", "low"]
     retrieved: list[RetrievedRef]
     provider: str
+    # Contract change (documented in ADR): the UI shows a cache chip when this is true.
+    cached: bool = False

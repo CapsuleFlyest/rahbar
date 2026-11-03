@@ -1,0 +1,20 @@
+# For kind in GitHub Actions: stub LLM, real embeddings from Ollama on the runner.
+# OLLAMA_HOST_PLACEHOLDER is replaced at runtime by scripts/ci/set-ollama-host.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+images:
+  - {name: rahbar-api, newTag: ci}
+  - {name: rahbar-indexer, newTag: ci}
+  - {name: rahbar-ui, newTag: ci}
+patches:
+  - target: {kind: ConfigMap, name: rahbar-config}
+    patch: |-
+      - {op: replace, path: /data/LLM_PROVIDER, value: stub}
+      - {op: replace, path: /data/OLLAMA_URL, value: "http://OLLAMA_HOST_PLACEHOLDER:11434"}
+  - target: {kind: NetworkPolicy, name: api-egress}
+    patch: |-
+      - {op: replace, path: /spec/egress/2/to/0/ipBlock/cidr, value: OLLAMA_HOST_PLACEHOLDER/32}
+  - target: {kind: NetworkPolicy, name: indexer-egress}
+    patch: |-
+      - {op: replace, path: /spec/egress/1/to/0/ipBlock/cidr, value: OLLAMA_HOST_PLACEHOLDER/32}

@@ -1,0 +1,96 @@
+# The api: reads the index, never writes it (ADR 0001). Three replicas behind one Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: rahbar
+  labels:
+    app.kubernetes.io/name: api
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  # maxUnavailable: 0 + maxSurge: 1 = a new pod must be Ready before an old one is removed.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/part-of: rahbar
+    spec:
+      serviceAccountName: rahbar-api
+      automountServiceAccountToken: false
+      # Long enough for the preStop sleep plus in-flight LLM calls to finish.
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: rahbar-api:base          # tag set by the overlay (images:)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: rahbar-config
+            - secretRef:
+                name: rahbar-secret
+                optional: true            # stub and ollama modes need no key
+          # Three probes with three different jobs (handout 4.3).
+          startupProbe:                   # finished booting? liveness/readiness wait for it
+            httpGet:
+              path: /healthz
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:                  # still working? failure = kubelet restarts it
+            httpGet:
+              path: /healthz              # never touches Chroma, Redis or the LLM
+              port: 8000
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:                 # can it take traffic? failure = out of the Service
+            httpGet:
+              path: /readyz               # Chroma reachable + non-empty, Redis, embedding pin
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          # Starting guesses. Replace with numbers justified by `kubectl top pods -n rahbar`
+          # under load, and commit that output (handout 4.5).
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          lifecycle:
+            preStop:
+              # Keep serving for 10s after the pod is marked Terminating, so the Service
+              # and the Ingress stop sending traffic before uvicorn stops accepting it.
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

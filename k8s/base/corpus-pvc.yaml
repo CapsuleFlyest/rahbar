@@ -1,0 +1,16 @@
+# Where the indexer finds its documents. The corpus PDFs are NOT in Git (only
+# corpus/MANIFEST.md and the fetch script are), so they are copied into this volume once:
+#   make corpus-load            # scripts/load-corpus.sh corpus/raw
+# The indexer Job mounts it read-only. Decision recorded in docs/PIPELINE.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corpus-data
+  namespace: rahbar
+  labels:
+    app.kubernetes.io/name: indexer
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rahbar
+# secret.placeholder.yaml is deliberately NOT listed: applying it would overwrite the real Secret.
+# Create the real one with:  export LLM_API_KEY=...; make secret
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - configmap.yaml
+  - corpus-pvc.yaml
+  - chroma-statefulset.yaml
+  - redis.yaml
+  - api-deployment.yaml
+  - ui-deployment.yaml
+  - services.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - networkpolicy.yaml
+  - indexer-job.yaml
+  - reindex-cronjob.yaml

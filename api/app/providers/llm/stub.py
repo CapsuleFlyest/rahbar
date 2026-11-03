@@ -7,12 +7,15 @@ real model. It is deterministic: the same input always gives the same output.
 from __future__ import annotations
 
 from ...schemas import Answer, Citation, Passage
+from .base import Usage
 
 
 class StubProvider:
     name = "stub"
 
-    def generate(self, question: str, passages: list[Passage]) -> Answer:
+    def generate(
+        self, question: str, passages: list[Passage], usage: Usage | None = None
+    ) -> Answer:
         if not passages:
             return Answer(
                 reasoning="stub: nothing was retrieved",

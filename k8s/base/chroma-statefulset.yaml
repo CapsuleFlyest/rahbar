@@ -1,0 +1,101 @@
+# The vector store. A StatefulSet, not a Deployment: it owns durable state, so it needs a
+# stable identity (chroma-0) and its own PersistentVolumeClaim via volumeClaimTemplates.
+# A Deployment would share or lose the volume across restarts. See docs/ARCHITECTURE.md.
+#
+# ASSUMPTION TO VERIFY: the chromadb/chroma image is run as uid/gid 1000 with a read-only
+# root filesystem. If `kubectl logs chroma-0 -n rahbar` shows a permission error, relax
+# runAsUser/readOnlyRootFilesystem for this one pod and write the reason in an ADR.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: chroma
+  namespace: rahbar
+  labels:
+    app.kubernetes.io/name: chroma
+spec:
+  replicas: 1                             # one writer's worth of state; the indexer is the writer
+  serviceName: chroma
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chroma
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chroma
+        app.kubernetes.io/part-of: rahbar
+    spec:
+      serviceAccountName: rahbar-chroma
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000                     # makes the PVC writable for uid 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: chroma
+          # Same version as the chromadb-client pinned in api/ and indexer/requirements.txt.
+          image: chromadb/chroma:1.0.12
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: IS_PERSISTENT
+              value: "TRUE"
+            - name: PERSIST_DIRECTORY
+              value: /data
+            - name: ANONYMIZED_TELEMETRY
+              value: "FALSE"
+            - name: HOME
+              value: /tmp
+          startupProbe:
+            httpGet:
+              path: /api/v2/heartbeat
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /api/v2/heartbeat
+              port: 8000
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v2/heartbeat
+              port: 8000
+            periodSeconds: 10
+            failureThreshold: 3
+          # Starting guesses: justify with `kubectl top pods -n rahbar`.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: chroma-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

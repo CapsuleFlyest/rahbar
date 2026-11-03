@@ -1,10 +1,13 @@
 """Week-1 retriever: the same three passages for every question.
 
 It lets you deploy and test the whole cluster before the RAG lecture.
-Switch to RETRIEVER=chroma in the ConfigMap once your index exists.
+Switch to RETRIEVER=chroma in the ConfigMap once your index is ready, and restart
+the api Deployment.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from ..schemas import Passage
 
@@ -42,5 +45,17 @@ _PASSAGES = [
 class StubRetriever:
     name = "stub"
 
-    def retrieve(self, question: str, k: int) -> list[Passage]:
+    def embed_query(self, question: str) -> list[float] | None:
+        return None
+
+    def retrieve(
+        self,
+        question: str,
+        k: int,
+        vector: list[float] | None = None,
+        include_superseded: bool = False,
+    ) -> list[Passage]:
         return [p.model_copy() for p in _PASSAGES[:k]]
+
+    def index_info(self) -> dict[str, Any]:
+        return {"index_id": "stub"}

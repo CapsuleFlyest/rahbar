@@ -15,9 +15,12 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from .config import IndexerSettings, get_settings
 from .models import Chunk
+
+DOC_SUFFIXES = {".pdf", ".md", ".html", ".htm", ".txt"}
 
 
 def log(msg: str, **fields: object) -> None:
@@ -53,7 +56,7 @@ def discover(corpus_dir: str) -> list[tuple[Path, str, bool]]:
                  bool(e.get("superseded", False))) for e in entries]
     found = []
     for path in sorted(root.glob("*")):
-        if path.suffix.lower() not in {".pdf", ".md", ".html", ".txt"}:
+        if path.suffix.lower() not in DOC_SUFFIXES:
             continue
         if path.name.lower().startswith("readme"):
             continue
@@ -63,24 +66,72 @@ def discover(corpus_dir: str) -> list[tuple[Path, str, bool]]:
     return found
 
 
-def run_pipeline(settings: IndexerSettings) -> int:
-    from .chunk import chunk
+def wait_for_corpus(settings: IndexerSettings) -> None:
+    """Poll until the corpus directory holds documents (the Job may start before the
+    corpus PVC is loaded), for at most CORPUS_WAIT_SECONDS."""
+    deadline = time.monotonic() + settings.corpus_wait_seconds
+    while True:
+        if Path(settings.corpus_dir).is_dir() and discover(settings.corpus_dir):
+            return
+        if time.monotonic() >= deadline:
+            raise SystemExit(f"no documents found in {settings.corpus_dir}")
+        log("waiting for corpus", corpus_dir=settings.corpus_dir)
+        time.sleep(5)
+
+
+def wait_for_chroma(settings: IndexerSettings, client: Any | None = None) -> Any:
+    """Retry the heartbeat until Chroma answers, for at most CHROMA_WAIT_SECONDS."""
+    from .store import get_client
+
+    deadline = time.monotonic() + settings.chroma_wait_seconds
+    while True:
+        try:
+            client = client or get_client(settings)
+            client.heartbeat()
+            return client
+        except Exception as exc:
+            if time.monotonic() >= deadline:
+                raise SystemExit(f"Chroma at {settings.chroma_host}:{settings.chroma_port} "
+                                 f"did not answer: {exc}") from exc
+            log("waiting for chroma", error=str(exc)[:120])
+            time.sleep(3)
+
+
+def run_pipeline(settings: IndexerSettings, client: Any | None = None) -> int:
+    from .chunk import amplification, chunk, count_tokens
     from .clean import clean
-    from .embed import embed
+    from .embed import embed, embedding_dimension
     from .extract import extract
     from .store import store
 
+    wait_for_corpus(settings)
     documents = discover(settings.corpus_dir)
-    if not documents:
-        raise SystemExit(f"no documents found in {settings.corpus_dir}")
+    client = wait_for_chroma(settings, client)
     all_chunks: list[Chunk] = []
+    original_words = 0
     for path, doc_version, superseded in documents:
-        doc = clean(extract(str(path), doc_version, superseded))
-        pieces = chunk(doc, settings.chunk_size, settings.chunk_overlap)
-        log("chunked", source=path.name, chunks=len(pieces))
+        raw = extract(str(path), doc_version, superseded,
+                      ocr_lang=settings.ocr_lang, ocr_dpi=settings.ocr_dpi)
+        doc = clean(raw)
+        pieces = chunk(doc, settings.chunk_size, settings.chunk_overlap,
+                       strategy=settings.chunk_strategy)
+        words = sum(count_tokens(p.text) for p in doc.pages)
+        log("chunked", source=path.name, doc_version=doc_version, superseded=superseded,
+            pages=len(doc.pages), ocr_pages=sum(1 for p in doc.pages if p.ocr),
+            words=words, chunks=len(pieces), amplification=amplification(doc, pieces))
+        if not pieces:
+            raise SystemExit(f"{path.name} produced 0 chunks: extraction found no text "
+                             f"(a scanned PDF needs OCR; check tesseract-ocr in the image)")
+        original_words += words
         all_chunks.extend(pieces)
     vectors = embed([c.text for c in all_chunks], settings)
-    return store(all_chunks, vectors, settings)
+    stored_words = sum(count_tokens(c.text) for c in all_chunks)
+    log("embedded", chunks=len(all_chunks), dimension=embedding_dimension(vectors),
+        embed_model=settings.embed_model,
+        amplification=round(stored_words / original_words, 3) if original_words else 0.0,
+        chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap,
+        chunk_strategy=settings.chunk_strategy)
+    return store(all_chunks, vectors, settings, client)
 
 
 def main() -> int:

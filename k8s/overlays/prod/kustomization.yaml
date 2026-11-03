@@ -1,0 +1,8 @@
+# Real config from base. CD sets the image names/tags: `kustomize edit set image rahbar-api=...:<sha>`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base]
+images:
+  - {name: rahbar-api, newName: docker.io/capsulef/rahbar-api, newTag: REPLACE_COMMIT_SHA}
+  - {name: rahbar-indexer, newName: docker.io/capsulef/rahbar-indexer, newTag: REPLACE_COMMIT_SHA}
+  - {name: rahbar-ui, newName: docker.io/capsulef/rahbar-ui, newTag: REPLACE_COMMIT_SHA}

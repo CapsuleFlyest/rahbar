@@ -1,0 +1,101 @@
+name: ci
+on:
+  pull_request: {branches: [main]}
+  push: {branches: [dev]}
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r api/requirements-dev.txt -r indexer/requirements-dev.txt
+      - run: ruff check api indexer eval corpus
+      - run: cd api && mypy app
+      - run: cd indexer && mypy pipeline
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r api/requirements-dev.txt -r indexer/requirements-dev.txt
+      # stub provider only: no network, no model
+      - run: cd api && pytest -q --cov=app --cov-fail-under=60
+      - run: cd indexer && pytest -q
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+          sudo mv kubeconform /usr/local/bin/
+      - run: for o in dev prod ci; do kubectl kustomize k8s/overlays/$o | kubeconform -strict -summary; done
+  build:
+    needs: [lint, test, manifests]   # never build from code that already failed
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # plain docker build: nothing is pushed on a pull request
+      - run: |
+          docker build -t rahbar-api:ci api
+          docker build -t rahbar-indexer:ci indexer
+          docker build -t rahbar-ui:ci ui
+          docker save rahbar-api:ci rahbar-indexer:ci rahbar-ui:ci -o images.tar
+      - uses: actions/upload-artifact@v4
+        with: {name: images, path: images.tar, retention-days: 1}
+  scan:
+    needs: [build]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix: {image: [rahbar-api, rahbar-indexer, rahbar-ui]}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: images}
+      - run: docker load -i images.tar
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.image }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+  e2e-eval:
+    needs: [build, scan]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/download-artifact@v4
+        with: {name: images}
+      - run: docker load -i images.tar
+      - uses: helm/kind-action@v1.10.0
+        with: {cluster_name: kind}
+      - name: ingress-nginx for kind
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.2/deploy/static/provider/baremetal/deploy.yaml
+          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=180s
+      - run: kind load docker-image rahbar-api:ci rahbar-indexer:ci rahbar-ui:ci --name kind
+      - run: scripts/ci/prepare-ollama.sh
+      - run: scripts/ci/set-ollama-host.sh k8s/overlays/ci
+      - run: kubectl apply -k k8s/overlays/ci
+      - run: kubectl -n rahbar rollout status statefulset/chroma --timeout=180s
+      - run: scripts/load-corpus.sh eval/fixtures
+      - run: kubectl -n rahbar wait --for=condition=complete job/indexer --timeout=600s
+      - run: kubectl -n rahbar rollout status deployment/api --timeout=300s
+      - name: eval gate
+        run: |
+          kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80 &
+          sleep 3
+          pip install httpx pyyaml
+          python eval/run_eval.py --api http://localhost:8080 --host rahbar.local \
+            --golden eval/fixtures/golden.fixture.yaml \
+            --baseline eval/fixtures/baseline.fixture.json --out eval/results.fixture.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: eval-results, path: eval/results.fixture.json}
+      - if: failure()
+        run: kubectl -n rahbar get pods; kubectl -n rahbar logs -l app.kubernetes.io/name=indexer --tail=80 || true

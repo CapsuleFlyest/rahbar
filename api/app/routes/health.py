@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+
+from .. import readiness
 
 router = APIRouter()
 
@@ -14,9 +17,10 @@ def healthz() -> dict[str, str]:
 
 
 @router.get("/readyz")
-def readyz(request: Request, response: Response) -> dict[str, object]:
-    # STARTER-TODO(4.3, 4.4): return 503, naming the failed dependency, unless Chroma is
-    # reachable, the collection exists and is non-empty, Redis is reachable, and the
-    # collection's embedding model matches EMBED_MODEL. Until then this always says yes,
-    # which is exactly the lie section 4.2 warns about.
-    return {"status": "ready", "checks": {}}
+def readyz(request: Request) -> JSONResponse:
+    """200 only when Chroma, a non-empty collection, Redis and the embedding pin are OK."""
+    ok, checks, failures = readiness.evaluate(request.app.state)
+    if ok:
+        return JSONResponse({"status": "ready", "checks": checks})
+    return JSONResponse(status_code=503,
+                        content={"status": "not ready", "checks": checks, "failed": failures})

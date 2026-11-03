@@ -1,0 +1,39 @@
+# The ONLY writer to Chroma. Runs once and exits (ADR 0001). Waits for Chroma and for the corpus
+# PVC to be filled (scripts/load-corpus.sh), so `kubectl apply -k` order does not matter.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: indexer
+  namespace: rahbar
+  labels: {app.kubernetes.io/name: indexer}
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: indexer, app.kubernetes.io/part-of: rahbar}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: rahbar-indexer
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: indexer
+          image: rahbar-indexer:base
+          imagePullPolicy: IfNotPresent
+          args: ["python", "-m", "pipeline.run"]
+          envFrom: [{configMapRef: {name: rahbar-config}}]
+          env:
+            - {name: CORPUS_DIR, value: /corpus}
+            - {name: CORPUS_WAIT_SECONDS, value: "600"}
+          # Starting guesses: justify with `kubectl top pods` while it runs. Over the memory
+          # limit = OOMKilled, exit code 137.
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "1", memory: 1536Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: corpus, mountPath: /corpus, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: corpus, persistentVolumeClaim: {claimName: corpus-data, readOnly: true}}
+        - {name: tmp, emptyDir: {}}

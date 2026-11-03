@@ -76,3 +76,23 @@ eval-fixtures: ## score the CI fixture golden set against a local `make dev`
 
 check: ## run the submission checker
 	$(PY) scripts/check_submission.py
+
+.PHONY: corpus-load corpus-load-fixtures cov manifests reindex status
+corpus-load: ## copy corpus/raw into the corpus PVC for the indexer Job
+	scripts/load-corpus.sh corpus/raw
+
+corpus-load-fixtures: ## copy the tiny CI fixture corpus into the corpus PVC
+	scripts/load-corpus.sh eval/fixtures
+
+cov: ## tests with coverage (api needs >= 60%)
+	cd api && $(BIN)/pytest -q --cov=app --cov-fail-under=60
+	cd indexer && $(BIN)/pytest -q
+
+manifests: ## kustomize build + kubeconform for every overlay (needs kubectl + kubeconform)
+	for o in dev prod ci; do kubectl kustomize k8s/overlays/$$o | kubeconform -strict -summary; done
+
+reindex: ## re-index with no redeploy
+	kubectl create job --from=cronjob/reindex manual-reindex-$$(date +%s) -n $(NS)
+
+status: ## everything in the namespace
+	kubectl get pods,jobs,svc,hpa,ingress,pvc -n $(NS)

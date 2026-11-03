@@ -1,0 +1,91 @@
+# Deny by default, then allow only the paths the architecture needs. Needs Calico (make cluster).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all, namespace: rahbar}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: rahbar}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: ui-ingress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: ui}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}}]
+      ports: [{port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: api-ingress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: api}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: ui}}
+      ports: [{port: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: chroma-ingress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: chroma}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: api}}
+        - podSelector: {matchLabels: {app.kubernetes.io/name: indexer}}
+      ports: [{port: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: redis-ingress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: redis}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {app.kubernetes.io/name: api}}}]
+      ports: [{port: 6379}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: api-egress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: api}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: chroma}}}]
+      ports: [{port: 8000}]
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: redis}}}]
+      ports: [{port: 6379}]
+    # Ollama on the laptop. VERIFY the IP: minikube ssh "grep host.minikube.internal /etc/hosts"
+    - to: [{ipBlock: {cidr: 192.168.49.1/32}}]
+      ports: [{port: 11434}]
+    # Hosted LLM over HTTPS (only used when LLM_PROVIDER=hosted)
+    - to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]}}]
+      ports: [{port: 443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: indexer-egress, namespace: rahbar}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: indexer}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: chroma}}}]
+      ports: [{port: 8000}]
+    - to: [{ipBlock: {cidr: 192.168.49.1/32}}]
+      ports: [{port: 11434}]

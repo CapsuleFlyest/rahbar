@@ -1,0 +1,7 @@
+# Everything lives in the `rahbar` namespace, never `default` (handout 4.1).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rahbar
+  labels:
+    app.kubernetes.io/part-of: rahbar
