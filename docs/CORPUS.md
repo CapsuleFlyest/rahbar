@@ -30,8 +30,8 @@ about an older version.
 
 ## Where the files come from
 
-`corpus/sources.yaml` lists every document. `python corpus/fetch.py` (or `make fetch`) copies the two
-committed SRDs into `corpus/raw/`, downloads the other four politely (one request at a time, a pause
+`corpus/sources.yaml` lists every document. `python corpus/fetch.py` (or `make fetch`) re-records the two
+committed SRDs (already in `corpus/raw/`) in the manifest, downloads the other four politely (one request at a time, a pause
 between), rasterizes the scanned copy, and writes `corpus/MANIFEST.md` with every URL and SHA-256.
 `python corpus/fetch.py --verify` re-checks the bytes. The two SRD PDFs are committed because their
 CC-BY-4.0 licence allows it; the other four are not, because they are not ours to redistribute.

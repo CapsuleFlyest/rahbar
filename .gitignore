@@ -27,3 +27,5 @@ fix.py
 # Local scratch
 *.log
 .DS_Store
+
+.patch
