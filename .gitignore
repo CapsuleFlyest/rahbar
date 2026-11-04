@@ -29,3 +29,6 @@ fix.py
 .DS_Store
 
 .patch
+# test coverage data
+.coverage
+htmlcov/

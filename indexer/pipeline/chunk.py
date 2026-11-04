@@ -174,8 +174,12 @@ def _chunk_structured(doc: Document, size: int, overlap: int) -> list[Chunk]:
         budget = size - heading_n if size - heading_n >= max(size // 2, 1) else max(size // 2, 1)
         # (kind, text, page) pieces, each already within the budget
         pieces: list[tuple[str, str, int]] = []
+        # Leave room for the overlap words carried in from the previous chunk: a prose piece
+        # that fills the whole budget would leave no space for them (overlap would be 0).
+        prose_limit = max(budget - overlap, budget // 2) if overlap > 0 else budget
         for kind, text, page in section.paragraphs:
-            split = _split_table(text, budget) if kind == "table" else _split_text(text, budget)
+            split = (_split_table(text, budget) if kind == "table"
+                     else _split_text(text, prose_limit))
             pieces.extend((kind, p, page) for p in split)
 
         body: list[str] = []
