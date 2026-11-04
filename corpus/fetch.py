@@ -93,7 +93,7 @@ def rasterize_pdf(content: bytes, dpi: int = 150) -> bytes:
     import io
 
     from pdf2image import convert_from_bytes  # type: ignore[import-not-found]
-    from PIL import Image, ImageFilter  # type: ignore[import-not-found]
+    from PIL import ImageFilter  # type: ignore[import-not-found]
 
     pages = []
     for i, page in enumerate(convert_from_bytes(content, dpi=dpi)):

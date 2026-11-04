@@ -63,5 +63,5 @@ jobs:
           sleep 3
           curl -sf -H "Host: rahbar.local" http://localhost:8080/ >/dev/null
           curl -sf -H "Host: rahbar.local" -H 'Content-Type: application/json' \
-            -d '{"question":"What is the minimum attendance to sit the final exam?"}' \
+            -d '{"question":"What DC does the Hide action need?"}' \
             http://localhost:8080/api/ask
