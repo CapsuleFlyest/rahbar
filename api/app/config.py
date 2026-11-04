@@ -46,7 +46,9 @@ class Settings:
     ollama_url: str = "http://host.minikube.internal:11434"
     hosted_base_url: str = ""        # e.g. an OpenAI-compatible endpoint
     llm_api_key: str = field(default="", repr=False)   # from the Secret; never log it
-    llm_timeout_seconds: float = 60.0
+    llm_timeout_seconds: float = 60.0   # TOTAL budget for one generation, retries included
+    llm_max_retries: int = 2            # extra attempts after a 429 or 5xx (hosted provider)
+    llm_retry_max_wait_seconds: float = 20.0   # longest single wait; a longer Retry-After gives up
 
     # Grounding (section 3.4): below this cosine similarity a passage is not evidence.
     relevance_floor: float = 0.50
@@ -79,6 +81,8 @@ def get_settings() -> Settings:
         hosted_base_url=os.environ.get("HOSTED_BASE_URL", ""),
         llm_api_key=os.environ.get("LLM_API_KEY", ""),
         llm_timeout_seconds=_float("LLM_TIMEOUT_SECONDS", 60.0),
+        llm_max_retries=_int("LLM_MAX_RETRIES", 2),
+        llm_retry_max_wait_seconds=_float("LLM_RETRY_MAX_WAIT_SECONDS", 20.0),
         relevance_floor=_float("RELEVANCE_FLOOR", 0.50),
         cache_enabled=_bool("CACHE_ENABLED", True),
         cache_threshold=_float("CACHE_THRESHOLD", 0.92),
