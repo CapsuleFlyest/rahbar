@@ -4,10 +4,11 @@
 # repo). doc_version and superseded become chunk metadata (section 3.1): they are how
 # the retriever tells the current rule from the repealed one.
 #
-# Convention for "superseded": the 2024 rules (SRD 5.2.1) are current. Everything written
-# for the 2014 rules is superseded: the SRD 5.1, the Sage Advice Compendium and the errata.
-# Questions about those documents must say that they mean the older rules (a year like 2014
-# or a word like "older"); see api/app/services/intent.py.
+# Convention for "superseded": a document is superseded only when a newer edition of the SAME
+# document replaced it. The 2014 SRD 5.1 is replaced by the 2024 SRD 5.2.1, so it is the one
+# superseded document. The Compendium and the three errata are the latest editions of their own
+# documents, so they stay visible to every question (and the scanned errata stays reachable).
+# Rules in them that the 2024 SRD changed are told apart by doc_version in the citations.
 #
 # Facts about the sources are in docs/CORPUS.md. The file name the indexer stores
 # (the `source` metadata) is the slug of `name`, e.g. "SRD 5.2.1 (2024)" -> srd-5-2-1-2024.pdf.
@@ -35,7 +36,7 @@ documents:
     url: https://media.wizards.com/2020/dnd/downloads/SA-Compendium.pdf
     mirror: https://www.orkerhulen.dk/onewebmedia/SA-Compendium.pdf
     doc_version: "2.7"
-    superseded: true
+    superseded: false
     notes: Official Q&A rulings, 2014 rules. Long answers with reasoning (property 5).
 
   # Property 3: the scanned PDF. Downloaded as a normal text PDF, then rendered to pictures so
@@ -44,18 +45,18 @@ documents:
     url: https://media.wizards.com/2021/dnd/downloads/PH-Errata.pdf
     rasterize: true
     doc_version: "2021"
-    superseded: true
+    superseded: false
     notes: Image-only after fetch; confirm with  pdffonts corpus/raw/<file>  (empty font list).
 
   - name: Dungeon Master's Guide Errata (2021)
     url: https://media.wizards.com/2021/dnd/downloads/DMG-Errata.pdf
     doc_version: "2021"
-    superseded: true
+    superseded: false
 
   - name: Monster Manual Errata (2018)
     url: https://media.wizards.com/2018/dnd/downloads/MM-Errata.pdf
     doc_version: "2018"
-    superseded: true
+    superseded: false
 
   # --- Property 6: deliberately absent. Nothing here covers mind flayers, the 4e Warlord class
   # or other game systems. Check after fetching:

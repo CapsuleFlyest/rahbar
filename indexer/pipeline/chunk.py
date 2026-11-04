@@ -25,7 +25,7 @@ from .models import Chunk, Document
 _MD_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 _KEYWORD_HEADING = re.compile(r"^(chapter|section|article|part|annex|appendix)\s+[\dIVXivx]+\b",
                               re.I)
-_NUMBERED_HEADING = re.compile(r"^\d+(?:\.\d+)*\.?\s+\S")
+_NUMBERED_HEADING = re.compile(r"^(?:\d+(?:\.\d+)+|\d+\.)\s+[A-Za-z]")
 _CLAUSE_START = re.compile(r"^(?:\d+(?:\.\d+)+\.?\s|\(\w{1,4}\)\s|[•●▪*-]\s)")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(\"'])")
 

@@ -85,3 +85,13 @@ def test_unsupported_type_is_rejected(tmp_path: Path) -> None:
     f.write_bytes(b"x")
     with pytest.raises(ValueError):
         extract(str(f), "1", False)
+
+
+def test_pdf_heading_lines_are_marked_by_font_size(tmp_path: Path) -> None:
+    pdf = tmp_path / "rules.pdf"
+    body = "Body text sentence about how the rule works in practice."
+    pdf.write_bytes(make_pdf([["#H Help Action", body, body, body, "#H Hide", body, body]]))
+    text = extract(str(pdf), "2024", False).pages[0].text
+    assert "## Help Action" in text
+    assert "## Hide" in text
+    assert "## Body text" not in text

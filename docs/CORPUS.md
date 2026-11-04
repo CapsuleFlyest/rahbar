@@ -9,14 +9,16 @@ ignores versions quotes a repealed rule with total confidence. That is failure m
 | --- | --- | --- | --- | --- | ---: |
 | 1 | `srd-5-1-2014.pdf` | System Reference Document 5.1 | 5.1 (2014 rules) | yes | 403 |
 | 2 | `srd-5-2-1-2024.pdf` | System Reference Document 5.2.1 | 5.2.1 (2024 rules) | no | 364 |
-| 3 | `sage-advice-compendium-v2-7-2021.pdf` | Sage Advice Compendium (official rulings) | 2.7 | yes | 23 |
-| 4 | `player-s-handbook-errata-2021-scanned-copy.pdf` | Player's Handbook Errata, rendered image-only | 2021 | yes | 5 |
-| 5 | `dungeon-master-s-guide-errata-2021.pdf` | Dungeon Master's Guide Errata | 2021 | yes | 2 |
-| 6 | `monster-manual-errata-2018.pdf` | Monster Manual Errata | 2018 | yes | 2 |
+| 3 | `sage-advice-compendium-v2-7-2021.pdf` | Sage Advice Compendium (official rulings) | 2.7 | no | 23 |
+| 4 | `player-s-handbook-errata-2021-scanned-copy.pdf` | Player's Handbook Errata, rendered image-only | 2021 | no | 5 |
+| 5 | `dungeon-master-s-guide-errata-2021.pdf` | Dungeon Master's Guide Errata | 2021 | no | 2 |
+| 6 | `monster-manual-errata-2018.pdf` | Monster Manual Errata | 2018 | no | 2 |
 
-Rule for `superseded`: the 2024 rules are current. Everything written for the 2014 rules (SRD 5.1,
-the Compendium, the errata) is `superseded: true`, and the retriever hides it unless the question asks
-about an older version.
+Rule for `superseded`: a document is superseded only when a newer edition of the same document replaced it.
+That is true of one document here: SRD 5.1 (2014), replaced by SRD 5.2.1 (2024). The Compendium and the errata
+are the latest editions of themselves, so the retriever shows them to every question, and the scanned
+errata can actually be retrieved. The retriever hides superseded documents unless the question asks about an
+older version.
 
 | # | Required property | Document(s) that provide it | Evidence or notes |
 | --- | --- | --- | --- |
@@ -39,5 +41,5 @@ CC-BY-4.0 licence allows it; the other four are not, because they are not ours t
 ## Known traps in this corpus
 
 - The 2014 and 2024 SRDs have different headings and numbers for the same rule; a prompt cannot tell them apart, only metadata can.
-- The Sage Advice Compendium and the errata describe the 2014 books, so they are superseded and invisible to ordinary questions. A question about them must name the older rules.
+- The Sage Advice Compendium and the errata describe the 2014 books but are not superseded, so they can surface next to 2024 rules. Their chunks carry `doc_version` 2.7 / 2021 / 2018, so a citation shows which edition a rule comes from.
 - SRD 5.1's text layer breaks words across lines; SRD 5.2.1's page footers ("13 System Reference Document 5.2.1") look like headings to a naive chunker.

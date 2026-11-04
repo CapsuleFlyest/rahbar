@@ -9,8 +9,9 @@
 # the indexer on the real PDFs and confirm each `section` string exists among the stored
 # chunks; fix any that differ. Then add one question about the scanned errata once OCR works.
 #
-# Conventions: SRD 5.2.1 (2024) is current. Everything for the 2014 rules is superseded, so a
-# question about it must say so ("2014", "older"...), or the superseded filter hides it.
+# Convention: SRD 5.2.1 (2024) is the current rule set and SRD 5.1 (2014) is the only superseded
+# document, so a question about the 2014 rules must say so ("2014", "older"...), or the
+# superseded filter hides it.
 
 questions:
   # ---- ordinary (8): answerable from the current rules, SRD 5.2.1 ----
