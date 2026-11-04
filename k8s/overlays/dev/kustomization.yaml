@@ -1,5 +1,5 @@
-# Week-1 mode on minikube: stub retriever + stub LLM + dummy index (no model needed).
-# On Thursday: delete the three patches below (or edit rahbar-config) to go real, then re-index.
+# Local minikube: the real pipeline. Chroma retrieval, Ollama on the laptop for embeddings and
+# generation (see the ConfigMap in ../../base), images built locally and tagged `dev` (make images).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources: [../../base]
@@ -7,15 +7,3 @@ images:
   - {name: rahbar-api, newTag: dev}
   - {name: rahbar-indexer, newTag: dev}
   - {name: rahbar-ui, newTag: dev}
-patches:
-  - target: {kind: ConfigMap, name: rahbar-config}
-    patch: |-
-      - {op: replace, path: /data/RETRIEVER, value: stub}
-      - {op: replace, path: /data/LLM_PROVIDER, value: stub}
-      - {op: replace, path: /data/EMBED_MODEL, value: dummy-768}
-  - target: {kind: Job, name: indexer}
-    patch: |-
-      - {op: replace, path: /spec/template/spec/containers/0/args, value: [python, -m, pipeline.run, --dummy]}
-  - target: {kind: CronJob, name: reindex}
-    patch: |-
-      - {op: replace, path: /spec/jobTemplate/spec/template/spec/containers/0/args, value: [python, -m, pipeline.run, --dummy]}

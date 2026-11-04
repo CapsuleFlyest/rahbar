@@ -3,7 +3,7 @@
 **Team:** CapsuleFlyer and AbubakrQ. **Tool:** Claude (Anthropic), used through Claude Code / claude.ai.
 
 We used Claude to produce a first working scaffold of the system from the assignment handout and the starter kit.
-All generated code was run against its own tests (api 34, indexer 19), `ruff` and `mypy`; Kubernetes manifests,
+All generated code was run against its own tests (run `make test`; counts are in the CI log), `ruff` and `mypy`; Kubernetes manifests,
 Dockerfiles and workflows were generated but not yet run on a cluster. We review, run, and adjust everything
 before submission; the last column records what we changed afterwards.
 

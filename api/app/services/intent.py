@@ -11,7 +11,7 @@ _OLD_WORD = re.compile(
     re.I,
 )
 _DOC_WORD = re.compile(r"\b(version|edition|rules?|polic(?:y|ies)|handbook|regulations?|"
-                       r"prospectus|report)\b", re.I)
+                       r"srd|compendium|errata|report)\b", re.I)
 
 _FOLLOWUP_OPENERS = re.compile(
     r"^\s*(and\b|also\b|then\b|but\b|what about\b|how about\b|what if\b|so\b)", re.I

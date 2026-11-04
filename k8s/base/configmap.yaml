@@ -10,20 +10,29 @@ metadata:
 data:
   # --- which implementations to load -------------------------------------------------
   RETRIEVER: "chroma"              # stub | chroma
-  LLM_PROVIDER: "ollama-host"      # stub | ollama-host | ollama-incluster | hosted
+  LLM_PROVIDER: "hosted"           # stub | ollama-host | ollama-incluster | hosted (Groq, see ADR 0004)
   READY_CHECKS: "on"               # /readyz really checks Chroma, Redis and the pin
 
   # --- the embedding pin (section 4.4): shared by api and indexer ---------------------
   EMBED_MODEL: "nomic-embed-text"
 
   # --- generation ---------------------------------------------------------------------
-  LLM_MODEL: "llama3.2:3b"
-  OLLAMA_URL: "http://host.minikube.internal:11434"
-  HOSTED_BASE_URL: ""              # only for LLM_PROVIDER=hosted; the KEY is in the Secret
+  # Generation: Groq free tier (OpenAI-compatible). The KEY is in the Secret, never here.
+  LLM_MODEL: "openai/gpt-oss-20b"
+  HOSTED_BASE_URL: "https://api.groq.com/openai/v1"
+  # Embeddings: Groq has no embedding model, so the pinned EMBED_MODEL is served by a small
+  # Ollama (nomic-embed-text) on the host. Used by the api (queries) and the indexer (chunks).
+  OLLAMA_URL: "http://192.168.49.10:11434"
   # Facts and JSON want 0 to 0.3. 0.2 keeps the wording stable without being brittle.
   # Temperature 0 does not fix hallucination: absent knowledge stays absent.
   TEMPERATURE: "0.2"
-  LLM_TIMEOUT_SECONDS: "60"
+  # One generation may take at most this long INCLUDING retries. Kept under the Ingress's 60 s
+  # proxy timeout, so a rate-limited call fails into the safe fallback instead of a 504.
+  LLM_TIMEOUT_SECONDS: "45"
+  # Groq free tier is rate limited (429). Retry this many times, waiting Retry-After (or 1, 2, 4 s),
+  # but never longer than LLM_RETRY_MAX_WAIT_SECONDS for one wait.
+  LLM_MAX_RETRIES: "2"
+  LLM_RETRY_MAX_WAIT_SECONDS: "20"
 
   # --- retrieval ----------------------------------------------------------------------
   CHROMA_HOST: "chroma"

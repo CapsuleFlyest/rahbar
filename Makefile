@@ -60,7 +60,7 @@ index: ## run the indexer once, from the CronJob's template (needs yours: CronJo
 	kubectl create job --from=cronjob/reindex reindex-$$(date +%s) -n $(NS)
 	@echo "watch it with: kubectl get jobs -n $(NS) -w"
 
-ask: ## ask through the Ingress: make ask Q="What CGPA puts a student on academic warning?"
+ask: ## ask through the Ingress: make ask Q="What DC does the Hide action need?"
 	@curl -s -X POST "http://$(INGRESS_IP)/api/ask" -H "Host: $(HOST)" \
 	  -H 'Content-Type: application/json' -d "$$(Q="$(Q)" $(PY) -c 'import json,os; print(json.dumps({"question": os.environ["Q"]}))')" \
 	  | $(PY) -m json.tool

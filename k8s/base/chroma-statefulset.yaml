@@ -24,6 +24,7 @@ spec:
         app.kubernetes.io/name: chroma
         app.kubernetes.io/part-of: rahbar
     spec:
+      enableServiceLinks: false   # else Service "chroma" injects CHROMA_PORT=tcp://..., which Chroma reads as its own config
       serviceAccountName: rahbar-chroma
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30

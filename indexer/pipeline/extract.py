@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import statistics
 import sys
 import time
 from html.parser import HTMLParser
@@ -61,7 +62,72 @@ def ocr_page(path: str, page_number: int, lang: str = DEFAULT_OCR_LANG,
             img.close()
 
 
-def _page_text_and_tables(page: Any) -> str:
+HEADING_SIZE_RATIO = 1.15    # a line this much bigger than the body text is a heading
+MAX_HEADING_WORDS = 12
+MAX_CROSSING_WORDS = 0.03    # a page is two-column when <3% of words straddle the middle
+
+
+def body_font_size(pdf: Any, sample_pages: int = 30) -> float | None:
+    """Median character size over an evenly spaced sample of pages: the body text size."""
+    n = len(pdf.pages)
+    if not n:
+        return None
+    sizes: list[float] = []
+    for i in range(0, n, max(1, n // sample_pages))[:sample_pages]:
+        page = pdf.pages[i]
+        sizes += [round(c["size"], 1) for c in page.chars if c.get("text", "").strip()]
+        page.flush_cache()
+    return statistics.median(sizes) if sizes else None
+
+
+def _is_two_column(body: Any) -> bool:
+    words = body.extract_words()
+    if len(words) < 40:
+        return False
+    x0, _, x1, _ = body.bbox
+    mid = (x0 + x1) / 2
+    left = sum(1 for w in words if w["x1"] <= mid + 2)
+    right = sum(1 for w in words if w["x0"] >= mid - 2)
+    crossing = len(words) - left - right
+    return (crossing / len(words) < MAX_CROSSING_WORDS
+            and left > 0.25 * len(words) and right > 0.25 * len(words))
+
+
+def _lines_to_text(lines: list[dict[str, Any]], body_size: float) -> str:
+    out: list[str] = []
+    for line in lines:
+        text = str(line["text"]).strip()
+        if not text:
+            continue
+        size = statistics.median(c["size"] for c in line["chars"])
+        if (size >= body_size * HEADING_SIZE_RATIO
+                and len(text.split()) <= MAX_HEADING_WORDS
+                and not text.endswith((".", ",", ";", ":"))
+                and sum(ch.isalpha() for ch in text) >= 2):
+            out.append(f"## {text}")
+        else:
+            out.append(text)
+    return "\n".join(out)
+
+
+def text_with_headings(body: Any, body_size: float | None) -> str:
+    """Text in reading order (left column, then right) with `## ` before heading lines.
+
+    Headings are found by font size, not by what the words look like: a table row such
+    as "5 +3" or a page footer must never become a section. Without a body size (a page
+    that has no text layer, or a tiny test PDF) this is plain extract_text()."""
+    if body_size is None:
+        return body.extract_text() or ""
+    x0, top, x1, bottom = body.bbox
+    boxes = [body]
+    if _is_two_column(body):
+        mid = (x0 + x1) / 2
+        boxes = [body.within_bbox((x0, top, mid, bottom)), body.within_bbox((mid, top, x1, bottom))]
+    parts = [_lines_to_text(b.extract_text_lines(return_chars=True), body_size) for b in boxes]
+    return "\n".join(p for p in parts if p)
+
+
+def _page_text_and_tables(page: Any, body_size: float | None = None) -> str:
     """Text outside tables, followed by each table as Markdown."""
     tables = []
     try:
@@ -74,7 +140,7 @@ def _page_text_and_tables(page: Any) -> str:
             body = body.outside_bbox(table.bbox)
         except Exception:
             pass
-    text = body.extract_text() or ""
+    text = text_with_headings(body, body_size)
     rendered = []
     for table in tables:
         try:
@@ -92,8 +158,9 @@ def _extract_pdf(path: str, doc: Document, ocr_lang: str, ocr_dpi: int) -> None:
     ocr_pages: list[int] = []
     empty_pages: list[int] = []
     with pdfplumber.open(path) as pdf:
+        body_size = body_font_size(pdf)
         for number, page in enumerate(pdf.pages, start=1):
-            text = _page_text_and_tables(page)
+            text = _page_text_and_tables(page, body_size)
             has_images = bool(getattr(page, "images", None))
             ocr = False
             if len(re.sub(r"\s", "", text)) < MIN_TEXT_CHARS and (has_images or not text.strip()):

@@ -72,7 +72,7 @@ spec:
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: redis}}}]
       ports: [{port: 6379}]
     # Ollama on the laptop. VERIFY the IP: minikube ssh "grep host.minikube.internal /etc/hosts"
-    - to: [{ipBlock: {cidr: 192.168.49.1/32}}]
+    - to: [{ipBlock: {cidr: 192.168.49.10/32}}]
       ports: [{port: 11434}]
     # Hosted LLM over HTTPS (only used when LLM_PROVIDER=hosted)
     - to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]}}]
@@ -87,5 +87,5 @@ spec:
   egress:
     - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: chroma}}}]
       ports: [{port: 8000}]
-    - to: [{ipBlock: {cidr: 192.168.49.1/32}}]
+    - to: [{ipBlock: {cidr: 192.168.49.10/32}}]
       ports: [{port: 11434}]

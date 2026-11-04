@@ -63,5 +63,5 @@ def test_fake_vectors_are_deterministic_unit_vectors() -> None:
 def test_discover_reads_fixture_front_matter() -> None:
     fixtures = Path(__file__).resolve().parents[2] / "eval" / "fixtures"
     found = {p.name: (version, old) for p, version, old in discover(str(fixtures))}
-    assert found["academic-rules-2023.md"] == ("2023", True)
-    assert found["academic-rules-2026.md"] == ("2026", False)
+    assert found["srd-5-1-excerpt.md"] == ("5.1", True)
+    assert found["srd-5-2-1-excerpt.md"] == ("5.2.1", False)

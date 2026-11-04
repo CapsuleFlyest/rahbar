@@ -29,6 +29,12 @@ MAX_RECALL5_DROP = 0.05        # recall@5 may fall at most 5 points below the ba
 MIN_CITATION_VALIDITY = 0.95   # at least 95% of citations must match retrieved passages
 REQUIRED_ABSTENTION = 1.0      # every must-abstain question must be declined
 
+# The API answers with this text when the model could not be reached or kept failing (e.g. a
+# hosted free tier rate-limiting us). It is NOT an honest abstention, so the runner retries it
+# and never counts it as one. Keep in sync with FALLBACK_MESSAGE in api/app/services/grounding.py.
+FALLBACK_MARKER = "I could not produce a reliable answer"
+RETRY_STATUS = {429, 502, 503, 504}
+
 
 def load_golden(path: Path) -> list[dict]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -45,11 +51,44 @@ def load_golden(path: Path) -> list[dict]:
     return questions
 
 
-def ask(client: httpx.Client, api: str, question: str) -> dict:
-    """POST one question and return the AskResponse as a dict (see api/app/schemas.py)."""
-    response = client.post(f"{api.rstrip('/')}/api/ask", json={"question": question})
-    response.raise_for_status()
-    return response.json()
+def is_fallback(response: dict) -> bool:
+    return FALLBACK_MARKER in str(response.get("answer", ""))
+
+
+def ask(client: httpx.Client, api: str, question: str, retries: int = 3,
+        retry_wait: float = 20.0) -> dict:
+    """POST one question and return the AskResponse as a dict (see api/app/schemas.py).
+
+    Hosted free tiers rate-limit per minute, so a 429/5xx, a timeout, or the API's safe
+    fallback answer is retried after a pause (Retry-After is honoured). The last response is
+    returned with `"fallback": true` added when it still is a fallback, so the scorer can tell
+    "the model was unreachable" from "the corpus does not cover this"."""
+    url = f"{api.rstrip('/')}/api/ask"
+    result: dict = {}
+    for attempt in range(retries + 1):
+        wait = retry_wait * (attempt + 1)
+        try:
+            response = client.post(url, json={"question": question})
+        except httpx.TransportError:
+            if attempt == retries:
+                raise
+            time.sleep(wait)
+            continue
+        if response.status_code in RETRY_STATUS and attempt < retries:
+            try:
+                wait = max(wait, float(response.headers.get("Retry-After", 0)))
+            except ValueError:
+                pass
+            time.sleep(wait)
+            continue
+        response.raise_for_status()
+        result = response.json()
+        if is_fallback(result) and attempt < retries:
+            time.sleep(wait)
+            continue
+        break
+    result["fallback"] = is_fallback(result)
+    return result
 
 
 def _norm(text: object) -> str:
@@ -110,6 +149,7 @@ def summarise(rows: list[dict]) -> dict:
     counts: dict[str, int] = {}
     cited = valid = 0
     abstain_total = abstain_ok = 0
+    fallbacks = 0
     expect_total = expect_hit = 0
     for row in rows:
         qtype = row.get("type", "ordinary")
@@ -126,9 +166,13 @@ def summarise(rows: list[dict]) -> dict:
         if validity is not None:
             cited += len(citations)
             valid += round(validity * len(citations))
+        if response.get("fallback"):
+            fallbacks += 1
         if row.get("must_abstain"):
             abstain_total += 1
-            abstain_ok += 0 if response.get("answered_from_context") else 1
+            # a fallback ("the model was unreachable") is not an honest abstention
+            honest = not response.get("answered_from_context") and not response.get("fallback")
+            abstain_ok += 1 if honest else 0
         if row.get("expect") and response.get("answered_from_context"):
             expect_total += 1
             expect_hit += 1 if _norm(row["expect"]) in _norm(response.get("answer")) else 0
@@ -143,6 +187,7 @@ def summarise(rows: list[dict]) -> dict:
         "citations_checked": cited,
         "abstention_correctness": round(abstain_ok / abstain_total, 4) if abstain_total else None,
         "must_abstain_questions": abstain_total,
+        "fallback_answers": fallbacks,
         "expect_hit_rate": round(expect_hit / expect_total, 4) if expect_total else None,
         "questions_by_type": dict(sorted(counts.items())),
     }
@@ -161,7 +206,8 @@ def gate(results: dict, baseline: dict | None) -> list[str]:
     abstention = results.get("abstention_correctness")
     if abstention is not None and abstention < REQUIRED_ABSTENTION:
         failures.append(f"abstention correctness {abstention:.0%}: a must-abstain question "
-                        f"was answered from context (required {REQUIRED_ABSTENTION:.0%})")
+                        f"was answered from context or hit the fallback instead of an honest "
+                        f"refusal (required {REQUIRED_ABSTENTION:.0%})")
     validity = results.get("citation_validity")
     if validity is not None and validity < MIN_CITATION_VALIDITY:
         failures.append(f"citation validity {validity:.0%} is below {MIN_CITATION_VALIDITY:.0%}")
@@ -175,6 +221,11 @@ def main() -> int:
     parser.add_argument("--golden", type=Path, default=HERE / "golden.yaml")
     parser.add_argument("--baseline", type=Path, default=HERE / "baseline.json")
     parser.add_argument("--out", type=Path, default=HERE / "results.json")
+    parser.add_argument("--delay", type=float, default=0.0,
+                        help="seconds to pause between questions (use ~5 for a free hosted tier)")
+    parser.add_argument("--retries", type=int, default=3, help="retries per question")
+    parser.add_argument("--retry-wait", type=float, default=20.0,
+                        help="base seconds to wait before a retry (grows each attempt)")
     parser.add_argument("--update-baseline", action="store_true",
                         help="write these results as the new baseline")
     args = parser.parse_args()
@@ -183,9 +234,11 @@ def main() -> int:
     rows = []
     headers = {"Host": args.host} if args.host else {}
     with httpx.Client(timeout=120.0, headers=headers) as client:
-        for q in questions:
+        for index, q in enumerate(questions):
+            if index and args.delay:
+                time.sleep(args.delay)
             started = time.perf_counter()
-            response = ask(client, args.api, q["question"])
+            response = ask(client, args.api, q["question"], args.retries, args.retry_wait)
             rows.append({
                 "id": q["id"], "type": q.get("type", "ordinary"),
                 "must_abstain": bool(q.get("must_abstain", False)),
@@ -194,7 +247,8 @@ def main() -> int:
                 "response": response,
                 "seconds": round(time.perf_counter() - started, 2),
             })
-            print(f"  {q['id']:<5} {rows[-1]['seconds']:>6.2f}s  {q['question'][:60]}")
+            flag = "  FALLBACK" if response.get("fallback") else ""
+            print(f"  {q['id']:<5} {rows[-1]['seconds']:>6.2f}s  {q['question'][:60]}{flag}")
 
     results = summarise(rows)
     baseline = json.loads(args.baseline.read_text()) if args.baseline.exists() else None

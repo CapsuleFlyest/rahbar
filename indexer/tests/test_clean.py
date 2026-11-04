@@ -11,11 +11,11 @@ def make_doc(texts: list[str]) -> Document:
 
 def test_running_headers_and_footers_are_removed() -> None:
     bodies = ["Attendance is compulsory.", "Fees are due in August.", "Grades are final.",
-              "Hostels exist."]
-    texts = [f"FAST-NUCES Academic Rules\n{b}\nConfidential {i}" for i, b in enumerate(bodies)]
+              "Mind flayers are not covered."]
+    texts = [f"System Reference Document 5.2.1\n{b}\nConfidential {i}" for i, b in enumerate(bodies)]
     out = clean(make_doc(texts))
     for page in out.pages:
-        assert "FAST-NUCES" not in page.text
+        assert "System Reference Document" not in page.text
         assert "Confidential" not in page.text
     assert [p.text for p in out.pages] == bodies
 
@@ -38,12 +38,12 @@ def test_hyphenated_line_break_is_joined_only_before_lowercase() -> None:
 
 
 def test_clause_numbers_headings_and_table_pipes_survive() -> None:
-    body = "5.4 Academic Warning\n(a) CGPA below 2.00\n| Fee | 10,000 |\n| --- | --- |"
+    body = "5.4 Exhaustion\n(a) DC 15 to hide\n| Plate | 1,500 |\n| --- | --- |"
     out = clean(make_doc([body] * 4))
     text = out.pages[0].text
-    assert "5.4 Academic Warning" in text
-    assert "(a) CGPA below 2.00" in text
-    assert "| Fee | 10,000 |" in text
+    assert "5.4 Exhaustion" in text
+    assert "(a) DC 15 to hide" in text
+    assert "| Plate | 1,500 |" in text
 
 
 def test_whitespace_and_control_characters_are_normalised() -> None:

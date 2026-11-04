@@ -9,10 +9,10 @@ Which documents needed OCR, one before-and-after example of a table, what could 
 The rules you applied, and one thing you deliberately did not strip.
 
 ## Chunking
-Size and overlap you shipped, storage amplification (stored tokens / original tokens),
+Size and overlap you shipped, storage amplification (stored words / original words; the chunker counts whitespace-separated words, not model tokens),
 and the three configurations you measured:
 
-| Size (tokens) | Overlap (tokens) | recall@5 | Chunks stored |
+| Size (words) | Overlap (words) | recall@5 | Chunks stored |
 | --- | --- | --- | --- |
 
 ## Embedding

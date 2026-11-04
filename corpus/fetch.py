@@ -6,6 +6,12 @@
     python corpus/fetch.py --verify              # re-hash local files against MANIFEST.md
     python corpus/fetch.py --list URL            # list the documents linked from an index page
 
+A sources.yaml entry has a name and ONE of:
+    url:        download it (optional  mirror: tried when url fails)
+    path:       a file already in the repo, e.g. corpus/raw/srd-5-1-2014.pdf (already in corpus/raw; re-recorded in the manifest)
+and optionally  rasterize: true  to turn a downloaded PDF into an image-only "scan"
+(pages rendered to pictures, no text layer), so the extract stage has to OCR it.
+
 Writes:
     corpus/raw/<file>         the documents (gitignored: never commit someone else's PDFs)
     corpus/raw/_index.json    file -> doc_version, superseded; the indexer reads this
@@ -80,15 +86,52 @@ def get(client: httpx.Client, url: str, attempts: int = 3) -> httpx.Response:
     raise RuntimeError(f"gave up after {attempts} attempts: {reason}")
 
 
+def rasterize_pdf(content: bytes, dpi: int = 150) -> bytes:
+    """Turn a PDF into an image-only PDF: every page becomes a slightly noisy picture and
+    the text layer is gone, like a photocopy run through a scanner. Needs poppler-utils
+    (pdftoppm) and Pillow on this machine."""
+    import io
+
+    from pdf2image import convert_from_bytes  # type: ignore[import-not-found]
+    from PIL import ImageFilter  # type: ignore[import-not-found]
+
+    pages = []
+    for i, page in enumerate(convert_from_bytes(content, dpi=dpi)):
+        page = page.convert("L").rotate(0.3 if i % 2 else -0.3, expand=False, fillcolor=255)
+        pages.append(page.filter(ImageFilter.GaussianBlur(0.6)).convert("RGB"))
+    buf = io.BytesIO()
+    pages[0].save(buf, "PDF", save_all=True, append_images=pages[1:], resolution=dpi)
+    return buf.getvalue()
+
+
+def add_local(doc: dict, entries: list[dict]) -> None:
+    """A document that already lives in the repo: copy it into corpus/raw and record it."""
+    src = (HERE.parent / doc["path"]).resolve()
+    if not src.exists():
+        raise RuntimeError(f"{doc['path']} not found")
+    data = src.read_bytes()
+    file = slug(doc["name"]) + (src.suffix.lower() or ".bin")
+    (RAW / file).write_bytes(data)
+    entries.append({
+        "name": doc["name"], "url": f"repo:{doc['path']}", "file": file, "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(), "content_type": "application/pdf",
+        "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "doc_version": doc.get("doc_version", "unknown"),
+        "superseded": bool(doc.get("superseded", False)),
+    })
+    print(f"  local   {file}, {len(data):,} bytes")
+
+
 def load_sources() -> list[dict]:
     if not SOURCES.exists():
-        sys.exit("corpus/sources.yaml not found. Copy corpus/sources.example.yaml to "
-                 "corpus/sources.yaml and keep the documents you want.")
+        sys.exit("corpus/sources.yaml not found: it lists the corpus documents.")
     data = yaml.safe_load(SOURCES.read_text(encoding="utf-8")) or {}
     docs = data.get("documents") or []
     for i, doc in enumerate(docs):
-        if not doc.get("name") or not doc.get("url"):
-            sys.exit(f"sources.yaml entry {i + 1} needs both name and url")
+        if not doc.get("name") or not (doc.get("url") or doc.get("path")):
+            sys.exit(f"sources.yaml entry {i + 1} needs a name and a url or a path")
+        if doc.get("rasterize") and not doc.get("url"):
+            sys.exit(f"sources.yaml entry {i + 1}: rasterize needs a url")
     return docs
 
 
@@ -102,6 +145,13 @@ def fetch(force: bool) -> int:
     with httpx.Client(headers={"User-Agent": USER_AGENT}, follow_redirects=True,
                       timeout=httpx.Timeout(60.0, connect=15.0)) as client:
         for doc in docs:
+            if not doc.get("url"):
+                try:
+                    add_local(doc, entries)
+                except Exception as exc:
+                    failures.append((doc["name"], str(exc)))
+                    print(f"  FAILED  {doc['name']}: {exc}")
+                continue
             name, url = doc["name"], normalise(doc["url"])
             old = previous.get(name)
             if old and not force and (RAW / old["file"]).exists() and old["url"] == url:
@@ -111,24 +161,38 @@ def fetch(force: bool) -> int:
                 continue
             print(f"  fetch   {name}")
             try:
-                response = get(client, url)
-                if response.status_code != 200:
-                    raise RuntimeError(f"HTTP {response.status_code}")
+                try:
+                    response = get(client, url)
+                    if response.status_code != 200:
+                        raise RuntimeError(f"HTTP {response.status_code}")
+                except RuntimeError:
+                    if not doc.get("mirror"):
+                        raise
+                    print("    primary url failed; trying the mirror")
+                    url = normalise(doc["mirror"])
+                    response = get(client, url)
+                    if response.status_code != 200:
+                        raise RuntimeError(f"HTTP {response.status_code} (mirror too)")
                 content_type = response.headers.get("content-type", "")
                 if "drive.google.com" in url and "html" in content_type:
                     raise RuntimeError("Google Drive returned a web page, not the file "
                                        "(too large for direct download, or not shared publicly)")
                 file = slug(name) + guess_extension(url, content_type)
-                (RAW / file).write_bytes(response.content)
+                body = response.content
+                note = ""
+                if doc.get("rasterize"):
+                    note = "; rasterized to an image-only PDF"
+                    body = rasterize_pdf(body)
+                (RAW / file).write_bytes(body)
                 entries.append({
-                    "name": name, "url": url, "file": file, "bytes": len(response.content),
-                    "sha256": hashlib.sha256(response.content).hexdigest(),
+                    "name": name, "url": url, "file": file, "bytes": len(body),
+                    "sha256": hashlib.sha256(body).hexdigest(),
                     "content_type": content_type.split(";")[0],
                     "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                     "doc_version": doc.get("doc_version", "unknown"),
                     "superseded": bool(doc.get("superseded", False)),
                 })
-                print(f"          {file}, {len(response.content):,} bytes")
+                print(f"          {file}, {len(body):,} bytes{note}")
             except Exception as exc:  # report every failure, keep going
                 failures.append((name, str(exc)))
                 print(f"  FAILED  {name}: {exc}")

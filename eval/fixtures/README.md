@@ -1,15 +1,16 @@
 # CI fixtures
 
 Three short Markdown documents for the `e2e-eval` job (section 6), so CI can index
-a corpus and score recall in a minute instead of six. The institute is fictional.
+a corpus and score recall in a minute instead of six. They are excerpts of the D&D
+System Reference Documents (CC-BY-4.0), cut down to a few sections each.
 
 | File | Why it is here |
 | --- | --- |
-| `academic-rules-2023.md` | The superseded version (75% attendance, CGPA 1.75, grade cap B) |
-| `academic-rules-2026.md` | The current version (80%, 2.00, no cap), plus one planted injection line |
-| `fees-2026.md` | Two tables and exact-term numbers |
+| `srd-5-1-excerpt.md` | The superseded version (2014 rules): exhaustion is a 6-level table, hiding is a contested check |
+| `srd-5-2-1-excerpt.md` | The current version (2024 rules): exhaustion is -2 per level, Hide is DC 15, plus one planted injection line |
+| `armor-table-2024.md` | A table and exact-term numbers (cost, Strength 15) |
 
-The hostel topic is missing on purpose: `golden.fixture.yaml` asks about it and
+Mind flayers are missing on purpose: `golden.fixture.yaml` asks about them and
 expects the service to decline.
 
 Each file starts with front matter (`doc_version`, `superseded`). The indexer's
