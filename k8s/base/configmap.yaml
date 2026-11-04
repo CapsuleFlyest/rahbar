@@ -22,7 +22,7 @@ data:
   HOSTED_BASE_URL: "https://api.groq.com/openai/v1"
   # Embeddings: Groq has no embedding model, so the pinned EMBED_MODEL is served by a small
   # Ollama (nomic-embed-text) on the host. Used by the api (queries) and the indexer (chunks).
-  OLLAMA_URL: "http://host.minikube.internal:11434"
+  OLLAMA_URL: "http://192.168.49.10:11434"
   # Facts and JSON want 0 to 0.3. 0.2 keeps the wording stable without being brittle.
   # Temperature 0 does not fix hallucination: absent knowledge stays absent.
   TEMPERATURE: "0.2"
