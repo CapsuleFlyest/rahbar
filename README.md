@@ -26,7 +26,7 @@ flowchart LR
   API -->|read only| C[(chroma StatefulSet)]
   J[indexer Job] -->|only writer| C
   API --> L[Groq LLM]
-  API --> E[Ollama embeddings on host]
+  API --> E[Ollama container, embeddings]
   J --> E
 ```
 
@@ -36,13 +36,24 @@ Run everything below in an **Ubuntu (WSL2) terminal**, with the repo cloned insi
 2. In Ubuntu: `make`, `curl`, `git`, Python 3.12, `kubectl` and `minikube` (Python 3.12 on Ubuntu 22.04 comes from the
    `ppa:deadsnakes/ppa` repository).
 3. A free Groq API key from console.groq.com (no card needed).
-4. Ollama with the embedding model: `ollama pull nomic-embed-text`. It must listen on all interfaces
-   (`OLLAMA_HOST=0.0.0.0`; on Windows set it as a user environment variable and restart Ollama).
+4. `poppler-utils` for rasterizing the scanned PDF: `sudo apt install -y poppler-utils`.
+
+Ollama (embeddings only) runs as a **container on the minikube Docker network**, not on your PC. The host-gateway
+address `host.minikube.internal` could not reach an Ollama installed on Windows or in WSL (Docker Desktop's gateway is a
+different network), so the NetworkPolicies and the ConfigMap point at `192.168.49.10`. Start it once, after `make cluster`:
+```bash
+docker run -d --name ollama --network minikube --ip 192.168.49.10 \
+  -v ollama-models:/root/.ollama --restart unless-stopped ollama/ollama
+docker exec ollama ollama pull nomic-embed-text
+```
+If you ever recreate minikube, run `docker rm -f ollama` first and repeat the commands (the `ollama-models` volume keeps the model).
 
 ## From a clean clone to an answer
 ```bash
+chmod +x scripts/*.sh scripts/ci/*.sh  # only needed if your clone lost the executable bit
 make install PY=python3.12         # .venv for fetch/eval tooling
 make cluster                       # minikube + Calico + metrics-server + ingress
+# now start the Ollama container (command above)
 make images                        # build and load the 3 images
 kubectl apply -k k8s/overlays/dev  # namespace, config, chroma, redis, api, ui, ingress, indexer Job
 export LLM_API_KEY=<your groq key>; make secret   # key goes to the cluster only, never to a file
@@ -51,16 +62,15 @@ make fetch                         # download the corpus
 make corpus-load                   # copy it into the corpus PVC; the indexer Job starts reading it
 kubectl -n rahbar wait --for=condition=complete job/indexer --timeout=15m
 echo "$(minikube ip) rahbar.local" | sudo tee -a /etc/hosts
-make ask Q="What DC does the Hide action need?"
+make ask Q="What DC does the Hide action need?"          # a grounded, cited answer
+make ask Q="What is a mind flayer's Mind Blast?"        # not in the corpus: must decline (answered_from_context false)
 ```
-**Check the host link before the indexer runs.** The indexer and api reach Ollama through `host.minikube.internal`
-and the NetworkPolicy allows only one host IP (`192.168.49.1` in `k8s/base/networkpolicy.yaml`):
+**Check the embedding link before the indexer runs** (the output must list `nomic-embed-text`):
 ```bash
-minikube ssh "grep host.minikube.internal /etc/hosts"                       # the IP must match the policy
-minikube ssh "curl -s http://host.minikube.internal:11434/api/tags"        # must list nomic-embed-text
+minikube ssh "curl -s http://192.168.49.10:11434/api/tags"
 ```
-If the second command fails, Ollama on Windows is not reachable from WSL: install Ollama inside Ubuntu
-(`curl -fsSL https://ollama.com/install.sh | sh`), run `OLLAMA_HOST=0.0.0.0 ollama serve`, pull the model again and retest.
+The same address is set in two places that must agree: `OLLAMA_URL` in `k8s/base/configmap.yaml` and the two `ipBlock`
+rules (`api-egress`, `indexer-egress`) in `k8s/base/networkpolicy.yaml`.
 
 **Browser on Windows.** `minikube ip` is only reachable from inside WSL. To open the UI from Windows, run
 `minikube tunnel` in a spare Ubuntu terminal and add `127.0.0.1 rahbar.local` to
