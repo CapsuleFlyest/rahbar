@@ -94,14 +94,14 @@ questions:
     type: exact
     question: How much does Plate Armor cost, and what Strength does it need?
     relevant:
-      - {source: srd-5-2-1-2024.pdf, section: "Armor"}   # TODO: confirm the stored section name
+      - {source: srd-5-2-1-2024.pdf, section: "Armor"}
     expect: "1,500 GP"
 
   - id: q13
     type: exact
     question: What is the weight and price of Half Plate Armor?
     relevant:
-      - {source: srd-5-2-1-2024.pdf, section: "Armor"}   # TODO: confirm the stored section name
+      - {source: srd-5-2-1-2024.pdf, section: "Armor"}
     expect: "750 GP"
 
   # ---- must abstain (2): topics the corpus deliberately lacks ----

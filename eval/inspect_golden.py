@@ -9,13 +9,14 @@ Read-only: it writes nothing and changes no file.
 """
 import argparse
 import sys
+import textwrap
 import time
 from pathlib import Path
 
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run_eval import ask, load_golden, section_matches  # noqa: E402
+from run_eval import _norm, ask, load_golden, section_matches  # noqa: E402
 
 
 def main() -> int:
@@ -47,6 +48,14 @@ def main() -> int:
                 print(f"   {rank} {'✓' if hit else ' '} {p.get('score', 0):.3f}  {p.get('source')} | {p.get('section')}  (p.{p.get('page')})")
             print(f"   -> answered_from_context={r.get('answered_from_context')}  "
                   f"confidence={r.get('confidence')}  fallback={r.get('fallback', False)}")
+            expect = q.get("expect")
+            if expect:
+                found = _norm(expect) in _norm(r.get("answer"))
+                print(f"   expect  \"{expect}\"  {'FOUND in answer' if found else 'NOT in answer (check the wording)'}")
+            print(textwrap.fill(str(r.get("answer") or "").strip(), width=100,
+                                initial_indent="   ANSWER  ", subsequent_indent="           "))
+            for c in r.get("citations") or []:
+                print(f"   cited   {c.get('source')} | {c.get('section')}  (p.{c.get('page')})")
             top1 = float(ret[0]["score"]) if ret else 0.0
             if q.get("must_abstain"):
                 top_abstain.append((q["id"], top1))
