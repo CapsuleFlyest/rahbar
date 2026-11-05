@@ -2,15 +2,21 @@
 
 Written by hand, kept honest. Delete this file before submitting.
 
-## Needs the cluster or GitHub (nothing here can be faked)
-1. `make cluster`, `make images`, `kubectl apply -k k8s/overlays/dev`, `make corpus-load`, wait for the indexer Job.
-2. GitHub: protect `main` (PR + CI + 1 approval), add `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`, open the first PR from `dev` naming the corpus.
-3. Evidence screenshots in `docs/evidence/`: branch protection, the blocked merge, `kubectl top pods`, `kubectl get endpoints`, `kubectl get hpa`.
+## Done and verified on minikube
+Cluster, images, indexer Job (6 documents), api 3/3 ready, a cited answer, an abstention, a cache hit.
 
-## Needs numbers from running the system
-4. Indexer: headings from font size and two-column extraction, so `section` is a real heading and not a page footer.
-5. Run `eval/run_eval.py`; confirm every `section` in `eval/golden.yaml`; fix the two "Armor" entries.
-6. Measure three (size, overlap) configurations; set `RELEVANCE_FLOOR` and `CACHE_THRESHOLD` from data.
-7. `--update-baseline`; commit `eval/baseline.json`, `eval/results.json`, `eval/fixtures/baseline.fixture.json`.
-8. Fill `docs/PIPELINE.md`, `docs/FAILURE-ANALYSIS.md` (four broken stages), `docs/ENGINEERING-NOTES.md` (seven answers with line numbers), finish `docs/adr/0002`, update `docs/AI-USAGE.md`.
-9. `python scripts/check_submission.py` until clean.
+## Needs GitHub (nothing here can be faked)
+1. Protect `main` (ruleset: PR + 1 approval + required checks, no bypass), add `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`, add the partner as a collaborator, edit PR #1 to name the corpus.
+2. A PR that fails the eval gate (screenshot the greyed merge button), the fix (screenshot green), a successful `cd.yml` run with SHA-tagged images on Docker Hub.
+
+## Needs the running system (re-index first if the indexer code changed since the last run)
+3. `python eval/inspect_golden.py`: confirm every `section` in `eval/golden.yaml`, fix the two "Armor" entries, add one question about the scanned errata.
+4. Check the absent topics really are absent: `for f in corpus/raw/*.pdf; do echo $f; pdftotext -q "$f" - | grep -ic -e "mind flayer" -e warlord; done` (the SRD and the Compendium must print 0 for mind flayer; if one does not, change the absent topic in `golden.yaml` and `docs/CORPUS.md`).
+5. `python eval/run_eval.py --update-baseline`; commit `eval/results.json` and `eval/baseline.json`.
+6. Three (size, overlap) runs for `docs/PIPELINE.md`; set `RELEVANCE_FLOOR` (mind-flayer chunks scored 0.58-0.60, above the 0.50 floor) and `CACHE_THRESHOLD` from data.
+7. Break four stages for `docs/FAILURE-ANALYSIS.md`.
+8. Evidence in `docs/evidence/`: branch protection, blocked merge, `kubectl get endpoints`, `kubectl get hpa`, rollout and undo, deleted pod, the EMBED_MODEL mismatch demo (api at 0/1 with the conflict in the log).
+
+## Writing that has to be yours
+9. ADR 0001-0003 in your own words (remove the DRAFT comments), the seven answers in `docs/ENGINEERING-NOTES.md`, the last column of `docs/AI-USAGE.md`.
+10. `python scripts/check_submission.py` until clean.
