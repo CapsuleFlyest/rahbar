@@ -19,3 +19,15 @@ before submission; the last column records what we changed afterwards.
 | Containers and CI/CD (`*/Dockerfile`, `.github/workflows`, `scripts/`) | Multi-stage Dockerfiles, `ci.yml`, `cd.yml`, helper scripts, Makefile targets | Made the scripts executable (mode 100755) and installed poppler for `fetch.py`. First workflow runs: to be filled. |
 | Documentation (`README.md`, `docs/adr/*`, `docs/ARCHITECTURE.md`) | First drafts, to be rewritten in our own words | README rewritten for WSL, Groq and the Ollama container, with a troubleshooting table; ADR 0004 rewritten; corpus docs updated. ADR 0001-0003 still to be reworded by us. |
 | Tests | Unit tests for every module above, with stubs and fakes (no network, no model) | Added tests for the readiness pin, retriever, cache, embed and store, and the hosted provider. |
+
+## AI-drafted documents
+
+Our instructor confirmed that documents may be drafted with AI. We therefore used Claude (Anthropic), in a long chat session, to draft
+`docs/ENGINEERING-NOTES.md`, `docs/FAILURE-ANALYSIS.md`, `docs/PIPELINE.md`, the ADRs, `README.md`, `docs/ARCHITECTURE.md` and this file. The assistant wrote from the code and
+manifests in the repository and from output we pasted into the chat (logs, `kubectl` output, the inspection and evaluation output). Each claim that cites a file and line was taken from a `grep`
+of the repository at the time; the measurements in `docs/PIPELINE.md`, `docs/FAILURE-ANALYSIS.md` and note 5 are left as marked fields until we fill them from our own `eval/results.json` and
+`eval/experiments/*.json`. We checked the commands and numbers against our cluster before submitting, and we can explain every answer.
+
+The assistant also found and diagnosed several real problems with us, listed in the last column above: the `CHROMA_PORT` crash, the unreachable Ollama, the retired Groq model,
+and the lost SRD 5.1 "Exhaustion" heading. It did not run anything on our cluster; every command was run by us.
+
