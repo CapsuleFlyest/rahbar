@@ -247,8 +247,14 @@ def main() -> int:
                 "response": response,
                 "seconds": round(time.perf_counter() - started, 2),
             })
+            retrieved = response.get("retrieved") or []
+            top = f"{float(retrieved[0]['score']):.2f}" if retrieved else " -- "
+            state = "answered" if response.get("answered_from_context") else "abstained"
             flag = "  FALLBACK" if response.get("fallback") else ""
-            print(f"  {q['id']:<5} {rows[-1]['seconds']:>6.2f}s  {q['question'][:60]}{flag}")
+            if q.get("must_abstain") and state == "answered":
+                flag += "  <-- SHOULD HAVE ABSTAINED"
+            print(f"  {q['id']:<5} {rows[-1]['seconds']:>6.2f}s  top={top} {state:<9}  "
+                  f"{q['question'][:50]}{flag}")
 
     results = summarise(rows)
     baseline = json.loads(args.baseline.read_text()) if args.baseline.exists() else None
