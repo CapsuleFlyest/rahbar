@@ -67,8 +67,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with: {name: images}
       - run: docker load -i images.tar
-      - uses: helm/kind-action@v1.14.0
-        with: {cluster_name: kind}
+      - name: kind cluster
+        run: |
+          kind version || { go install sigs.k8s.io/kind@v0.31.0; sudo cp "$(go env GOPATH)/bin/kind" /usr/local/bin/; }
+          kind create cluster --name kind --wait 180s
       - name: ingress-nginx for kind
         run: |
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.2/deploy/static/provider/baremetal/deploy.yaml
