@@ -41,7 +41,7 @@ questions:
 
   - id: f05
     type: abstain
-    question: What is the save DC of a mind flayer's Mind Blast?
+    question: What is the capital of France?
     relevant: []
     must_abstain: true
 
