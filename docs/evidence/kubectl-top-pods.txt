@@ -1,0 +1,9 @@
+# top - 2026-11-08 12:59:13
+NAME                     CPU(cores)   MEMORY(bytes)   
+api-54f45db497-b8gxr     5m           66Mi            
+api-54f45db497-pz6ml     5m           67Mi            
+api-54f45db497-wps55     5m           104Mi           
+chroma-0                 3m           93Mi            
+redis-847544cf78-npcrf   15m          6Mi             
+ui-5bbbcb86bb-hbw5j      1m           3Mi             
+ui-5bbbcb86bb-r2ptb      1m           2Mi             
