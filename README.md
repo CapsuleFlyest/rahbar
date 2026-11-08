@@ -56,7 +56,7 @@ make cluster                       # minikube + Calico + metrics-server + ingres
 # now start the Ollama container (command above)
 make images                        # build and load the 3 images
 kubectl apply -k k8s/overlays/dev  # namespace, config, chroma, redis, api, ui, ingress, indexer Job
-export LLM_API_KEY=<your groq key>; make secret   # key goes to the cluster only, never to a file
+export LLM_API_KEY='gsk_...your groq key...'; make secret   # key goes to the cluster only, never to a file
 kubectl -n rahbar rollout restart deployment/api  # pods read the Secret at start
 make fetch                         # download the corpus
 make corpus-load                   # copy it into the corpus PVC; the indexer Job starts reading it
@@ -77,8 +77,18 @@ rules (`api-egress`, `indexer-egress`) in `k8s/base/networkpolicy.yaml`.
 `C:\Windows\System32\drivers\etc\hosts` (as administrator), then browse to http://rahbar.local.
 
 Re-index with no redeploy: `kubectl create job --from=cronjob/reindex manual-reindex-1 -n rahbar`.
+Generation uses `openai/gpt-oss-20b` on Groq (`LLM_MODEL` in the ConfigMap; Groq retired `llama-3.1-8b-instant` on 2026-08-16, which shows up as `HTTP 404` in the api log).
 The Groq free tier is rate-limited per minute; if answers come back slowly or as a safe fallback, wait a minute and retry.
 Secrets are never committed.
+
+## Troubleshooting (all hit for real)
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `chroma-0` in CrashLoopBackOff, log says `found string "tcp://..." expected u16 for key "PORT"` | The Service named `chroma` injects `CHROMA_PORT=tcp://...`, which Chroma reads as config | `enableServiceLinks: false` on the pod (already set) |
+| Indexer log says `ConnectError` to the embedding URL | Ollama not reachable from the cluster | Start the Ollama container (above) and re-run the `curl` check |
+| Indexer Job `Failed`, no pod, `BackoffLimitExceeded` | A pod was deleted by hand, which counts as a failure | Never delete the pod: `kubectl -n rahbar delete job indexer && kubectl apply -k k8s/overlays/dev` |
+| `make ask` hangs or prints a JSON error | `minikube ip` is not reachable from WSL | `minikube tunnel` in a second terminal, then `make ask INGRESS_IP=127.0.0.1 Q="..."` |
+| Answers are always the safe fallback, api log says `provider failed ... HTTP 404` | Wrong or retired Groq model, or a bad key | Check `LLM_MODEL` against console.groq.com/docs/models; re-run `make secret` |
 
 ## API
 | Method | Path | Purpose |

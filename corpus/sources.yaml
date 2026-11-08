@@ -18,12 +18,14 @@ documents:
   # --- Properties 2, 4, 5, 7: the version pair. Public, CC-BY-4.0, committed in the repo. ---
   - name: SRD 5.1 (2014)
     path: corpus/raw/srd-5-1-2014.pdf
+    source_url: https://dnd.wizards.com/resources/systems-reference-document
     doc_version: "5.1"
     superseded: true
     notes: 403 pages. 2014 rules. Two-column layout, hundreds of tables, long definitions.
 
   - name: SRD 5.2.1 (2024)
     path: corpus/raw/srd-5-2-1-2024.pdf
+    source_url: https://www.dndbeyond.com/srd
     doc_version: "5.2.1"
     superseded: false
     notes: 364 pages. 2024 rules; replaces the 5.1. Same topics, different numbers (exhaustion, hiding).

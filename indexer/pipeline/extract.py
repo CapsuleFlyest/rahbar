@@ -63,6 +63,9 @@ def ocr_page(path: str, page_number: int, lang: str = DEFAULT_OCR_LANG,
 
 
 HEADING_SIZE_RATIO = 1.15    # a line this much bigger than the body text is a heading
+BOLD_HEADING_RATIO = 1.08    # ...or this much bigger when the line is set in a bold face
+STATBLOCK_SUBHEADS = {"actions", "legendary actions", "reactions", "bonus actions", "traits"}
+FOOTER_ZONE = 0.93           # lines starting below this fraction of the page are footers, never headings
 MAX_HEADING_WORDS = 12
 MAX_CROSSING_WORDS = 0.03    # a page is two-column when <3% of words straddle the middle
 
@@ -93,14 +96,28 @@ def _is_two_column(body: Any) -> bool:
             and left > 0.25 * len(words) and right > 0.25 * len(words))
 
 
-def _lines_to_text(lines: list[dict[str, Any]], body_size: float) -> str:
+def _is_bold(line: dict[str, Any]) -> bool:
+    chars = [c for c in line["chars"] if str(c.get("text", "")).strip()]
+    if not chars:
+        return False
+    marks = ("bold", "semibold", "black", "heavy")
+    bold = sum(1 for c in chars if any(m in str(c.get("fontname", "")).lower() for m in marks))
+    return bold / len(chars) > 0.6
+
+
+def _lines_to_text(lines: list[dict[str, Any]], body_size: float,
+                   page_bottom: float | None = None) -> str:
     out: list[str] = []
     for line in lines:
         text = str(line["text"]).strip()
         if not text:
             continue
         size = statistics.median(c["size"] for c in line["chars"])
-        if (size >= body_size * HEADING_SIZE_RATIO
+        in_footer = page_bottom is not None and float(line.get("top", 0)) > page_bottom * FOOTER_ZONE
+        bold_heading = (size >= body_size * BOLD_HEADING_RATIO and _is_bold(line)
+                        and text.lower() not in STATBLOCK_SUBHEADS)   # monster blocks repeat these
+        bigger = size >= body_size * HEADING_SIZE_RATIO or bold_heading
+        if (bigger and not in_footer
                 and len(text.split()) <= MAX_HEADING_WORDS
                 and not text.endswith((".", ",", ";", ":"))
                 and sum(ch.isalpha() for ch in text) >= 2):
@@ -123,7 +140,7 @@ def text_with_headings(body: Any, body_size: float | None) -> str:
     if _is_two_column(body):
         mid = (x0 + x1) / 2
         boxes = [body.within_bbox((x0, top, mid, bottom)), body.within_bbox((mid, top, x1, bottom))]
-    parts = [_lines_to_text(b.extract_text_lines(return_chars=True), body_size) for b in boxes]
+    parts = [_lines_to_text(b.extract_text_lines(return_chars=True), body_size, bottom) for b in boxes]
     return "\n".join(p for p in parts if p)
 
 

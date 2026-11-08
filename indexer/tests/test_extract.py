@@ -95,3 +95,29 @@ def test_pdf_heading_lines_are_marked_by_font_size(tmp_path: Path) -> None:
     assert "## Help Action" in text
     assert "## Hide" in text
     assert "## Body text" not in text
+
+
+def _line(text: str, size: float, font: str = "Body", top: float = 100.0) -> dict:
+    return {"text": text, "top": top, "chars": [{"text": ch, "size": size, "fontname": font} for ch in text]}
+
+
+def test_slightly_bigger_bold_line_is_a_heading() -> None:
+    from pipeline.extract import _lines_to_text
+    out = _lines_to_text([_line("Exhaustion", 10.8, "GillSans-SemiBold"), _line("A body line", 9.8)], 9.8, 800.0)
+    assert out.split("\n")[0] == "## Exhaustion"
+
+
+def test_slightly_bigger_regular_line_is_not_a_heading() -> None:
+    from pipeline.extract import _lines_to_text
+    assert not _lines_to_text([_line("Some text", 10.8, "Calibri")], 9.8, 800.0).startswith("##")
+
+
+def test_footer_is_never_a_heading_even_when_bold_and_big() -> None:
+    from pipeline.extract import _lines_to_text
+    footer = _line("System Reference Document 5.1 352", 12.0, "GillSans-SemiBold", top=790.0)
+    assert not _lines_to_text([footer], 9.8, 800.0).startswith("##")
+
+
+def test_statblock_subheads_stay_plain_text_when_only_bold_marks_them() -> None:
+    from pipeline.extract import _lines_to_text
+    assert not _lines_to_text([_line("Actions", 10.8, "GillSans-SemiBold")], 9.8, 800.0).startswith("##")
