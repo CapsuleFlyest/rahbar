@@ -67,7 +67,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: {name: images}
       - run: docker load -i images.tar
-      - uses: helm/kind-action@v1.10.0
+      - uses: helm/kind-action@v1.14.0
         with: {cluster_name: kind}
       - name: ingress-nginx for kind
         run: |
